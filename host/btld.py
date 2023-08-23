@@ -1,0 +1,194 @@
+import serial
+import sys
+import math
+import hashlib
+import ecdsa
+from ecdsa import SigningKey
+from ecdsa.util import sigencode_string
+
+def ascii2dec(x):
+    if ord(x) >= ord("0") and ord(x) <= ord("9"):
+        return ord(x) - 48
+    elif ord(x) >= ord("A") and ord(x) <= ord("F"):
+        return ord(x) - 55
+    elif ord(x) >= ord("a") and ord(x) <= ord("f"):
+        return ord(x) - 87
+    else:
+        return 0
+
+
+def encode_for_uart(data):
+    encoded = []
+    encoded.append(ord('@'))
+    for d in data:
+        if d == ord('@') or d == ord('\n') or d == ord('\\'):
+            encoded.append(ord('\\'))
+        encoded.append(d)
+    encoded.append(ord('\n'))
+    return encoded
+
+
+def encode_data(data, count, addr):
+    encoded = []
+    addr_hi = (addr >> 8) & 0xff
+    addr_lo = addr & 0xff
+
+    encoded.append(ord('D'))
+    encoded.append(count)
+    encoded.append(addr_hi)
+    encoded.append(addr_lo)
+
+    for d in data:
+        encoded.append(d)
+
+    return encode_for_uart(encoded)
+
+
+def encode_size(fw_size):
+    encoded = []
+    hi = (fw_size >> 8) & 0xff
+    lo = fw_size & 0xff
+
+    encoded.append(ord('M'))
+    encoded.append(hi)
+    encoded.append(lo)
+
+    return encode_for_uart(encoded)
+
+
+def encode_signat(signat):
+    encoded = []
+
+    encoded.append(ord('N'))
+
+    for s in signat:
+        encoded.append(s)
+
+    return encode_for_uart(encoded)
+
+
+def wait_for_mcu(ser):
+    print("Waiting for MCU")
+    while ser.read(1) != b'F':
+        continue
+    return
+
+
+def main():
+    ser = serial.Serial(sys.argv[1], baudrate=115200, timeout=0.5)
+    f = open(sys.argv[2], 'r', encoding="utf-8")
+    fw_hash = hashlib.new('sha256')
+
+    next_expect_addr = 0
+    ignore_next_data_rec = False
+    fw_size = 0
+
+    while (True):
+        ser.write(b'#')
+        print("Sending start to MCU")
+        mcu_resp = ser.read(1)
+        if  mcu_resp == b'F':
+            break
+        else:
+            print("Received unexepcted:", mcu_resp)
+    print("MCU ready")
+
+    for line in f:
+        if line[0] != ':':
+            print("Unexpected start of hex file")
+            return -1
+
+        count = ascii2dec(line[1]) * 16 + ascii2dec(line[2])
+
+        addr = ascii2dec(line[3]) * (16 * 16 * 16) + ascii2dec(line[4]) * (16 * 16) + ascii2dec(line[5]) * 16 + ascii2dec(line[6])
+
+        rec_type = ascii2dec(line[8])
+
+        print("Count", count, "addr", addr, "rec_type", rec_type)
+
+
+        if rec_type == 0:
+            if ignore_next_data_rec:
+                print("Ignoring this record")
+                continue
+
+            fw_size += count
+
+            if next_expect_addr < addr:
+                fill_data = []
+                fill_addr = next_expect_addr
+                fill_cnt = addr - next_expect_addr
+                fw_size += fill_cnt
+
+                print("Fill with", fill_cnt, "0xFF")
+                for i in range(64):
+                    fill_data.append(0xFF)
+
+                for i in range(math.floor(fill_cnt / 64)):
+                    fill_enc = encode_data(fill_data, 64, fill_addr)
+                    fill_addr += 64
+                    fw_hash.update(bytes(fill_data))
+                    ser.write(bytes(fill_enc))
+                    wait_for_mcu(ser)
+
+                if fill_cnt % 64:
+                    fill_enc = encode_data(fill_data[:fill_cnt % 64], fill_cnt % 64, fill_addr)
+                    fw_hash.update(bytes(fill_data[:fill_cnt % 64]))
+                    ser.write(bytes(fill_enc))
+                    wait_for_mcu(ser)
+
+            data = []
+            for i in range(count):
+                data.append(ascii2dec(line[9 + i * 2]) * 16 + ascii2dec(line[10 + i * 2]))
+
+            fw_hash.update(bytes(data))
+            print("data is", data)
+            encoded = encode_data(data, count, addr)
+            print("encoded is", encoded)
+
+            ser.write(bytes(encoded))
+            next_expect_addr = addr + count
+            wait_for_mcu(ser)
+
+        elif rec_type == 1:
+            # hex done
+            print("Sending size", fw_size)
+            enc_siz = encode_size(fw_size)
+            ser.write(bytes(enc_siz))
+            wait_for_mcu(ser)
+
+            print("fw sha256:", fw_hash.hexdigest())
+
+            with open(sys.argv[3]) as f:
+               sk = SigningKey.from_pem(f.read(), hashlib.sha256)
+
+            # sign hash and write signature
+            # TODO: sign 256 bit hash and remove allow_truncate
+            fw_sig = sk.sign_digest_deterministic(fw_hash.digest(), sigencode=sigencode_string, allow_truncate=True)
+            final_signat = fw_sig[1:21]
+            final_signat += fw_sig[22:]
+
+            print("signat is:", final_signat.hex())
+
+            ser.write(bytes(encode_signat(final_signat)))
+            wait_for_mcu(ser)
+
+            ser.write(b'@X\n')
+
+            print("Flashing done")
+            return
+
+        elif rec_type == 4:
+            ignore_next_data_rec = False
+            for i in range(count * 2):
+                if (ascii2dec(line[9 + i]) != 0):
+                    ignore_next_data_rec = True
+                    break
+        else:
+            print("Ingnoring record type", rec_type)
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
