@@ -64,10 +64,13 @@ void erase_flash(size_t btld_addr) {
         EECON2 = 0x55;
         EECON2 = 0xaa;
         EECON1bits.WR = 1; /* start programming (CPU stall until done) */
+
+        if (addr == 0) {
+            write_flash(0, save_goto_btld, 4);
+        }
+
         erase_blk_cnt--;
         addr += 64;
     }
-
-    write_flash(0, save_goto_btld, 4);
 }
 
