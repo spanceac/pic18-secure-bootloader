@@ -106,20 +106,29 @@ void fw_receive(void) {
     while (1) {
         uart_get_byte(&byte, 0, true);
 
-        if (escaped) {
-            escaped = false;
-        } else {
-            if (byte == '\\') {
-                escaped = true;
-                continue;
-            }
-        }
-
-        if (byte == '@') {
-            i = 0;
+        if (byte == '\\' && !escaped) {
+            /* next byte needs escaping */
+            escaped = true;
+            continue;
         }
 
         msg[i] = byte;
+
+        if (escaped) {
+            escaped = false;
+            i++;
+            if (i == sizeof(msg)) {
+                i = 0;
+            }
+            continue;
+        }
+
+        if (byte == '@' && i > 0) {
+            /* unexpected start of message, reset buffer */
+            i = 1;
+            msg[0] = '@';
+            continue;
+        }
 
         if (msg[i] == '\n' && msg[0] == '@') {
             if (i > 1) { /* at least the opcode as payload */
@@ -134,7 +143,6 @@ void fw_receive(void) {
                 i = 0;
             }
         }
-
     }
 }
 
