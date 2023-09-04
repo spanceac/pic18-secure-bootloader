@@ -12,7 +12,7 @@ int write_flash(uint16_t addr, const uint8_t *buf, size_t count) {
 
     for (i = 0; i < count; i++) {
         TABLAT = buf[i];
-        
+
         if (((addr + 1) % FLASH_BLOCK_SIZ == 0) || (i == count - 1)) {
             /* don't advance table pointer, to keep it in block range */
             asm("TBLWT*");
@@ -23,7 +23,7 @@ int write_flash(uint16_t addr, const uint8_t *buf, size_t count) {
 
             EECON2 = 0x55;
             EECON2 = 0xaa;
-           
+
             /* start programming (CPU stall until done) */
             EECON1bits.WR = 1;
             asm("TBLRD*+"); /* increment the pointer but don't write anything, quirk */
@@ -55,8 +55,8 @@ void erase_flash(size_t btld_addr) {
     read_flash(0, save_goto_btld, 4);
 
     while (erase_blk_cnt > 0) {
-        TBLPTRH = (uint8_t)addr >> 8;
-        TBLPTRL = (uint8_t)addr & 0xff;
+        TBLPTRH = addr >> 8;
+        TBLPTRL = addr & 0xff;
         EECON1bits.EEPGD = 1; /* point to Flash memory */
         EECON1bits.CFGS = 0; /* access Flash program memory */
         EECON1bits.WREN = 1; /* enable write to memory */
