@@ -240,10 +240,9 @@ void main(void) {
 
     mcu_init();
     uart_init();
-    uart_write_byte('N');
 
-    ret = uart_get_byte(&byte, 1200, false);
-    if (ret || byte != '#') {
+    ret = uart_expect_msg("@BTL\n", 5, 60000);
+    if (ret) {
         /* nothing interesting from PC, booting old code */
         if (signature_valid()) {
             uart_write_byte('S');
@@ -255,7 +254,12 @@ void main(void) {
     }
 
     erase_flash(BTLD_OFFSET);
-    uart_write_byte('F');
+
+    uart_write_byte('@');
+    uart_write_byte('O');
+    uart_write_byte('K');
+    uart_write_byte('\n');
+
     fw_receive();
 
     asm("reset");

@@ -2,6 +2,7 @@ import serial
 import sys
 import math
 import hashlib
+import time
 import ecdsa
 from ecdsa import SigningKey
 from ecdsa.util import sigencode_string
@@ -84,10 +85,13 @@ def main():
     fw_size = 0
 
     while (True):
-        ser.write(b'#')
-        print("Sending start to MCU")
-        mcu_resp = ser.read(1)
-        if  mcu_resp == b'F':
+        print("Sending start sequence to MCU")
+        for byte in b'@BTL\n':
+            ser.write(byte.to_bytes(1, 'big'))
+            time.sleep(0.001)
+
+        mcu_resp = ser.read(4)
+        if  mcu_resp == b'@OK\n':
             break
         else:
             print("Received unexepcted:", mcu_resp)

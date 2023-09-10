@@ -14,7 +14,7 @@ void uart_init(void) {
     SPBRG1 = 8 ; /* 115200 baudrate */
 }
 
-int uart_get_byte(uint8_t *byte, size_t timeout_ms, bool block) {
+int uart_get_byte(uint8_t *byte, size_t timeout_us, bool block) {
     int ret = -1;
 
     if (block) {
@@ -23,17 +23,51 @@ int uart_get_byte(uint8_t *byte, size_t timeout_ms, bool block) {
         return 0;
     }
 
-    for (; timeout_ms > 0; timeout_ms--) {
+    for (; timeout_us > 0; timeout_us--) {
         if (PIR1bits.RC1IF == 0) {
-            __delay_ms(1);
+            // loop tunning for delaying exactly 1us necessary
+           asm("nop");
         } else {
             *byte = RCREG1;
             ret = 0;
             break;
         }
     }
-        
+
     return ret;
+}
+
+int uart_expect_msg(char *msg, size_t _len, size_t timeout_us)
+{
+    char byte;
+    size_t i = 0, len = _len;
+    int ret;
+
+    if (RCSTA1bits.OERR) {
+        // clear RX overrun error which stops UART RX
+        RCSTA1bits.CREN = 0;
+        RCSTA1bits.CREN = 1;
+    }
+
+    while (len) {
+        ret = uart_get_byte((uint8_t *)&byte, 1, false);
+
+        timeout_us--;
+        if (!timeout_us) {
+            return -1;
+        }
+
+        if (ret == 0) {
+            if (byte == msg[i]) {
+                i++;
+                len--;
+            } else {
+                i = 0;
+                len = _len;
+            }
+        }
+    }
+    return 0;
 }
 
 void uart_write_byte(uint8_t byte) {
@@ -52,3 +86,4 @@ void uart_send_buf(uint8_t *buf, size_t cnt) {
     }
 }
 #endif
+
