@@ -167,14 +167,11 @@ def main():
                sk = SigningKey.from_pem(f.read(), hashlib.sha256)
 
             # sign hash and write signature
-            # TODO: sign 256 bit hash and remove allow_truncate
-            fw_sig = sk.sign_digest_deterministic(fw_hash.digest(), sigencode=sigencode_string, allow_truncate=True)
-            final_signat = fw_sig[1:21]
-            final_signat += fw_sig[22:]
+            fw_sig = sk.sign_digest_deterministic(fw_hash.digest(), sigencode=sigencode_string)
 
-            print("signat is:", final_signat.hex())
+            print("signat is:", fw_sig.hex())
 
-            ser.write(bytes(encode_signat(final_signat)))
+            ser.write(bytes(encode_signat(fw_sig)))
             wait_for_mcu(ser)
 
             ser.write(b'@X\n')
