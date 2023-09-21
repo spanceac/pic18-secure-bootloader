@@ -46,6 +46,20 @@ void read_flash(uint16_t address, uint8_t *buf, size_t count) {
     }
 }
 
+static inline void flash_erase_blk(size_t blk_idx)
+{
+    uint16_t blk_addr = blk_idx * FLASH_BLOCK_SIZ;
+    TBLPTRH = blk_addr >> 8;
+    TBLPTRL = blk_addr & 0xff;
+    EECON1bits.EEPGD = 1; /* point to Flash memory */
+    EECON1bits.CFGS = 0; /* access Flash program memory */
+    EECON1bits.WREN = 1; /* enable write to memory */
+    EECON1bits.FREE = 1; /* enable block erase */
+    EECON2 = 0x55;
+    EECON2 = 0xaa;
+    EECON1bits.WR = 1; /* start programming (CPU stall until done) */
+}
+
 void erase_flash(size_t btld_addr) {
     size_t i = 0;
     size_t erase_blk_cnt = btld_addr / FLASH_BLOCK_SIZ;
@@ -53,24 +67,14 @@ void erase_flash(size_t btld_addr) {
     uint8_t save_goto_btld[4];
 
     read_flash(0, save_goto_btld, 4);
+    flash_erase_blk(1);
+    write_flash(64, save_goto_btld, 4);
 
-    while (erase_blk_cnt > 0) {
-        TBLPTRH = addr >> 8;
-        TBLPTRL = addr & 0xff;
-        EECON1bits.EEPGD = 1; /* point to Flash memory */
-        EECON1bits.CFGS = 0; /* access Flash program memory */
-        EECON1bits.WREN = 1; /* enable write to memory */
-        EECON1bits.FREE = 1; /* enable block erase */
-        EECON2 = 0x55;
-        EECON2 = 0xaa;
-        EECON1bits.WR = 1; /* start programming (CPU stall until done) */
+    for (size_t curr_erase_blk = 0; curr_erase_blk < erase_blk_cnt; curr_erase_blk++) {
+        flash_erase_blk(curr_erase_blk);
 
-        if (addr == 0) {
+        if (curr_erase_blk == 0) {
             write_flash(0, save_goto_btld, 4);
         }
-
-        erase_blk_cnt--;
-        addr += 64;
     }
 }
-
