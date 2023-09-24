@@ -15,13 +15,29 @@
 
 #include "mcu/mcu.h"
 
-#define BTLD_OFFSET 0x1000
 #define SIGNAT_SIZE 64
 #define CODE_SIZE_OFFSET BTLD_OFFSET - 2
 #define SIGNAT_OFFSET CODE_SIZE_OFFSET - SIGNAT_SIZE
 
+#define HOST_MSG_START '@'
+#define HOST_MSG_END '\n'
+#define HOST_MSG_ESC '\\'
+
+#define HOST_MSG_PROGRAM_SIZE 'M'
+#define HOST_MSG_PROGRAM_SIGNAT 'N'
+#define HOST_MSG_FLASH_DATA 'D'
+#define HOST_MSG_FLASH_STOP 'X'
+
+#define MCU_MSG_OP_SUCCESS 'F'
+
+#define MCU_MSG_SIG_CHECK_OK 'S'
+#define MCU_MSG_SIG_CHECK_FAIL 'K'
+
 #define MCU_ERR_INVALID_PAYLOAD 'I'
 #define MCU_ERR_DENIED_ADDR 'A'
+
+#define HOST_HANDSHAKE_MSG "@BTL\n"
+#define MCU_HANDSHAKE_RESP "@OK\n"
 
 enum flashing_status {
     STATUS_NO_ERR,
@@ -44,13 +60,13 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
     uint16_t addr = 0;
 
     switch(op) {
-        case 'M':
+        case HOST_MSG_PROGRAM_SIZE:
             if (len < 2) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
             write_flash(CODE_SIZE_OFFSET, data, 2);
             break;
-        case 'N':
+        case HOST_MSG_PROGRAM_SIGNAT:
             if (len < SIGNAT_SIZE) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
@@ -70,7 +86,7 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
 
             write_flash(SIGNAT_OFFSET, data, SIGNAT_SIZE);
             break;
-        case 'D':
+        case HOST_MSG_FLASH_DATA:
             if (len < 4) { /* 1 byte cnt, 2 bytes addr, 1 data min */
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
@@ -96,7 +112,7 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
             }
             write_flash(addr, data + 3, len - 3);
             break;
-        case 'X':
+        case HOST_MSG_FLASH_STOP:
             if (len > 0) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
@@ -118,7 +134,7 @@ enum flashing_status fw_receive(void) {
     while (1) {
         uart_get_byte(&byte, 0, true);
 
-        if (byte == '\\' && !escaped) {
+        if (byte == HOST_MSG_ESC && !escaped) {
             /* next byte needs escaping */
             escaped = true;
             continue;
@@ -135,14 +151,14 @@ enum flashing_status fw_receive(void) {
             continue;
         }
 
-        if (byte == '@' && i > 0) {
+        if (byte == HOST_MSG_START && i > 0) {
             /* unexpected start of message, reset buffer */
             i = 1;
-            msg[0] = '@';
+            msg[0] = HOST_MSG_START;
             continue;
         }
 
-        if (msg[i] == '\n' && msg[0] == '@') {
+        if (msg[i] == HOST_MSG_END && msg[0] == HOST_MSG_START) {
             if (i > 1) { /* at least the opcode as payload */
                 /* should check if byte cnt matches data received cnt */
                 enum flashing_status status = message_handle(msg[1], msg + 2, i - 2);
@@ -151,7 +167,7 @@ enum flashing_status fw_receive(void) {
                 }
             }
             i = 0;
-            uart_write_byte('F');
+            uart_write_byte(MCU_MSG_OP_SUCCESS);
         } else {
             i++;
             if (i == sizeof(msg)) {
@@ -257,24 +273,21 @@ void main(void) {
     mcu_init();
     uart_init();
 
-    ret = uart_expect_msg("@BTL\n", 5, 60000);
+    ret = uart_expect_msg(HOST_HANDSHAKE_MSG, 5, 60000);
     if (ret) {
         /* nothing interesting from PC, booting old code */
         if (signature_valid()) {
-            uart_write_byte('S');
+            uart_write_byte(MCU_MSG_SIG_CHECK_OK);
             asm("goto 4"); /* jump to user code */
         } else {
-            uart_write_byte('K');
+            uart_write_byte(MCU_MSG_SIG_CHECK_FAIL);
             asm("reset");
         }
     }
 
     erase_flash(BTLD_OFFSET);
 
-    uart_write_byte('@');
-    uart_write_byte('O');
-    uart_write_byte('K');
-    uart_write_byte('\n');
+    uart_send_buf((uint8_t *)MCU_HANDSHAKE_RESP, strlen(MCU_HANDSHAKE_RESP));
 
     status = fw_receive();
     if (status != STATUS_NO_ERR) {

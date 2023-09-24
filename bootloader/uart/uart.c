@@ -77,7 +77,6 @@ void uart_write_byte(uint8_t byte) {
     return;
 }
 
-#ifdef DEBUG
 void uart_send_buf(uint8_t *buf, size_t cnt) {
     while (cnt > 0) {
         uart_write_byte(*buf);
@@ -85,5 +84,4 @@ void uart_send_buf(uint8_t *buf, size_t cnt) {
         cnt--;
     }
 }
-#endif
 

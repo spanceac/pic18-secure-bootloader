@@ -7,10 +7,22 @@ import ecdsa
 from ecdsa import SigningKey
 from ecdsa.util import sigencode_string
 
+HOST_MSG_START = b'@'
+HOST_MSG_END = b'\n'
+HOST_MSG_ESC = b'\\'
+
+HOST_MSG_PROGRAM_SIZE = b'M'
+HOST_MSG_PROGRAM_SIGNAT = b'N'
+HOST_MSG_FLASH_DATA = b'D'
+HOST_MSG_FLASH_STOP = b'X'
+
 MCU_MSG_OP_SUCCESS = b'F'
 
 MCU_ERR_INVALID_PAYLOAD = b'I'
 MCU_ERR_DENIED_ADDR = b'A'
+
+HOST_HANDSHAKE_MSG = b'@BTL\n'
+MCU_HANDSHAKE_RESP = b'@OK\n'
 
 def ascii2dec(x):
     if ord(x) >= ord("0") and ord(x) <= ord("9"):
@@ -25,12 +37,12 @@ def ascii2dec(x):
 
 def encode_for_uart(data):
     encoded = []
-    encoded.append(ord('@'))
+    encoded.append(ord(HOST_MSG_START))
     for d in data:
-        if d == ord('@') or d == ord('\n') or d == ord('\\'):
-            encoded.append(ord('\\'))
+        if d == ord(HOST_MSG_START) or d == ord(HOST_MSG_END) or d == ord(HOST_MSG_ESC):
+            encoded.append(ord(HOST_MSG_ESC))
         encoded.append(d)
-    encoded.append(ord('\n'))
+    encoded.append(ord(HOST_MSG_END))
     return encoded
 
 
@@ -39,7 +51,7 @@ def encode_data(data, count, addr):
     addr_hi = (addr >> 8) & 0xff
     addr_lo = addr & 0xff
 
-    encoded.append(ord('D'))
+    encoded.append(ord(HOST_MSG_FLASH_DATA))
     encoded.append(count)
     encoded.append(addr_hi)
     encoded.append(addr_lo)
@@ -55,7 +67,7 @@ def encode_size(fw_size):
     hi = (fw_size >> 8) & 0xff
     lo = fw_size & 0xff
 
-    encoded.append(ord('M'))
+    encoded.append(ord(HOST_MSG_PROGRAM_SIZE))
     encoded.append(hi)
     encoded.append(lo)
 
@@ -65,7 +77,7 @@ def encode_size(fw_size):
 def encode_signat(signat):
     encoded = []
 
-    encoded.append(ord('N'))
+    encoded.append(ord(HOST_MSG_PROGRAM_SIGNAT))
 
     for s in signat:
         encoded.append(s)
@@ -99,12 +111,12 @@ def main():
 
     while (True):
         print("Sending start sequence to MCU")
-        for byte in b'@BTL\n':
+        for byte in HOST_HANDSHAKE_MSG:
             ser.write(byte.to_bytes(1, 'big'))
             time.sleep(0.001)
 
         mcu_resp = ser.read(4)
-        if  mcu_resp == b'@OK\n':
+        if  mcu_resp == MCU_HANDSHAKE_RESP:
             break
         else:
             print("Received unexepcted:", mcu_resp)
@@ -187,7 +199,7 @@ def main():
             ser.write(bytes(encode_signat(fw_sig)))
             wait_for_mcu(ser)
 
-            ser.write(b'@X\n')
+            ser.write(HOST_MSG_START + HOST_MSG_FLASH_STOP +  HOST_MSG_END)
 
             print("Flashing done")
             return
