@@ -7,6 +7,11 @@ import ecdsa
 from ecdsa import SigningKey
 from ecdsa.util import sigencode_string
 
+MCU_MSG_OP_SUCCESS = b'F'
+
+MCU_ERR_INVALID_PAYLOAD = b'I'
+MCU_ERR_DENIED_ADDR = b'A'
+
 def ascii2dec(x):
     if ord(x) >= ord("0") and ord(x) <= ord("9"):
         return ord(x) - 48
@@ -70,9 +75,17 @@ def encode_signat(signat):
 
 def wait_for_mcu(ser):
     print("Waiting for MCU")
-    while ser.read(1) != b'F':
-        continue
-    return
+    while True:
+        resp = ser.read(1)
+
+        if resp == MCU_MSG_OP_SUCCESS:
+            return
+        elif resp == MCU_ERR_INVALID_PAYLOAD:
+            print("ERR: MCU reported invalid payload")
+            sys.exit(-1)
+        elif resp == MCU_ERR_DENIED_ADDR:
+            print("ERR: MCU reported denied write address")
+            sys.exit(-1)
 
 
 def main():

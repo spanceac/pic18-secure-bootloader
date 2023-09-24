@@ -20,6 +20,16 @@
 #define CODE_SIZE_OFFSET BTLD_OFFSET - 2
 #define SIGNAT_OFFSET CODE_SIZE_OFFSET - SIGNAT_SIZE
 
+#define MCU_ERR_INVALID_PAYLOAD 'I'
+#define MCU_ERR_DENIED_ADDR 'A'
+
+enum flashing_status {
+    STATUS_NO_ERR,
+    STATUS_ERR_INVALID_PAYLOAD,
+    STATUS_ERR_DENIED_ADDR,
+};
+
+char mcu_errs[] = {MCU_MSG_OP_SUCCESS, MCU_ERR_INVALID_PAYLOAD, MCU_ERR_DENIED_ADDR};
 //#define DEBUG
 
 const uint8_t ec_pub_key[] = {
@@ -30,19 +40,19 @@ const uint8_t ec_pub_key[] = {
                               0xa0,0xe2,0x9a,0xa8,0xa6,0x9e,0xfc,0x2c
 };
 
-int message_handle(uint8_t op, uint8_t *data, size_t len) {
+enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
     uint16_t addr = 0;
 
     switch(op) {
         case 'M':
             if (len < 2) {
-                return -1;
+                return STATUS_ERR_INVALID_PAYLOAD;
             }
             write_flash(CODE_SIZE_OFFSET, data, 2);
             break;
         case 'N':
             if (len < SIGNAT_SIZE) {
-                return -2;
+                return STATUS_ERR_INVALID_PAYLOAD;
             }
 
 #if 0
@@ -62,7 +72,7 @@ int message_handle(uint8_t op, uint8_t *data, size_t len) {
             break;
         case 'D':
             if (len < 4) { /* 1 byte cnt, 2 bytes addr, 1 data min */
-                return -3;
+                return STATUS_ERR_INVALID_PAYLOAD;
             }
 
             /* ignoring data count byte data[0] */
@@ -70,7 +80,7 @@ int message_handle(uint8_t op, uint8_t *data, size_t len) {
             addr = (uint16_t)data[1] << 8 | data[2];
 
             if (addr + len - 3 >= SIGNAT_OFFSET) {
-                return -4;
+                return STATUS_ERR_DENIED_ADDR;
             }
 
             if (addr == 0) {
@@ -84,24 +94,22 @@ int message_handle(uint8_t op, uint8_t *data, size_t len) {
                 }
                 break;
             }
-            if (write_flash(addr, data + 3, len - 3)) {
-                return -88;
-            }
+            write_flash(addr, data + 3, len - 3);
             break;
         case 'X':
             if (len > 0) {
-                return -5;
+                return STATUS_ERR_INVALID_PAYLOAD;
             }
             asm("reset");
             break;
         default:
-            return -6;
+            return STATUS_ERR_INVALID_PAYLOAD;
             break;
     }
-    return 0;
+    return STATUS_NO_ERR;
 }
 
-void fw_receive(void) {
+enum flashing_status fw_receive(void) {
     uint8_t msg[70];
     uint8_t byte;
     size_t i = 0;
@@ -137,7 +145,10 @@ void fw_receive(void) {
         if (msg[i] == '\n' && msg[0] == '@') {
             if (i > 1) { /* at least the opcode as payload */
                 /* should check if byte cnt matches data received cnt */
-                message_handle(msg[1], msg + 2, i - 2);
+                enum flashing_status status = message_handle(msg[1], msg + 2, i - 2);
+                if (status != STATUS_NO_ERR) {
+                    return status;
+                }
             }
             i = 0;
             uart_write_byte('F');
@@ -241,6 +252,7 @@ int signature_valid() {
 void main(void) {
     uint8_t byte;
     int ret;
+    enum flashing_status status;
 
     mcu_init();
     uart_init();
@@ -264,7 +276,10 @@ void main(void) {
     uart_write_byte('K');
     uart_write_byte('\n');
 
-    fw_receive();
+    status = fw_receive();
+    if (status != STATUS_NO_ERR) {
+        uart_write_byte(mcu_errs[status]);
+    }
 
     asm("reset");
 }
