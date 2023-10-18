@@ -61,13 +61,13 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
 
     switch(op) {
         case HOST_MSG_PROGRAM_SIZE:
-            if (len < 2) {
+            if (len != 2) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
             write_flash(CODE_SIZE_OFFSET, data, 2);
             break;
         case HOST_MSG_PROGRAM_SIGNAT:
-            if (len < SIGNAT_SIZE) {
+            if (len != SIGNAT_SIZE) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
 
