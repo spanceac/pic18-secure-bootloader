@@ -79,7 +79,7 @@ Secure boot process is the following:
 - bootloader reads from a reserved area in flash the `size` of the flashed firmware
 - bootloader reads and computes the SHA256 checksum of the flashed firmware(on a count of `size` bytes from previous step)
 - bootloader reads from a reserved area in flash the `signature` of the flashed firmware
-- with the information obtained from steps above, bootloader calls the cryptographic validation function and decides whether to execute or not to the flashed firmware
+- with the information obtained from steps above, bootloader calls the cryptographic validation function and decides whether to execute or not user's firmware
 
 Without using these two repos bellow, this bootloader would not have been possible:
 
@@ -89,7 +89,7 @@ https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c - the SHA256 alg
 
 # The flashing tool
 
-The flashing tool is a python script running on a computer and needs a serial UART interface.
+The [flashing tool](host/btld.py) is a python script running on a computer and needs a serial UART interface.
 
 Flashing tool's purpose is:
 - send the firmware from the hex to the MCU's bootloader over serial interface
@@ -142,9 +142,9 @@ When using this compiler flag, the resulted hex will be filled only with `NOP(0x
 
 At reset we always want to jump directly to bootloader code instead of executing NOP.
 
-Thus I wrote an utility python script that patches the bootloader to have `GOTO BOOTLOADER_OFFSET`(0x1000) as the instruction at address 0.
+Thus I wrote a [tool](tools/btld-patch.py) python script that patches the bootloader to have `GOTO BOOTLOADER_OFFSET`(0x1000) as the instruction at address 0.
 
-This utility `btld-patch.py` is called by the project's Makefile, so you will always have your bootloader hex file patched correctly after building.
+This tool is called by the project's Makefile, so you will always have your bootloader hex file patched correctly after building.
 
 The bootloader code offset needs to be adjusted:
 - if a MCU with a bigger flash size is used, so MCU will be placed at end of flash(prevents flash space waste)
@@ -331,6 +331,8 @@ These aside, the secure boot process should be correct under a specific scenario
 
 You will need Microchip's XC-8 compiler and python3 in order to compile the bootloader code.
 
+Adjust your compiler path in the [Makefile](bootloader/Makefile).
+
 The compiler and the bootloader patching tool are invoked from the `Makefile`.
 
 ```
@@ -375,7 +377,7 @@ pub:
     a8:a6:9e:fc:2c
 ```
 
-This will be translated into the following C array holding the public key in bootloader's `main.c` source file:
+This will be translated into the following C array holding the public key in bootloader's [main code](bootloader/main.c) source file:
 ```
 const uint8_t ec_pub_key[] = {
     0xce,0x30,0x36,0x7c,0xc1,0x6e,0xb0,0x8c,0x5f,0x0e,0xb0,0x2c,0x11,0x4f,
@@ -411,3 +413,5 @@ The key points of this bootloader are:
 
 * probably the only one of its kind
 
+
+P.S. I also wrote in the past a non-secure bootloader for PIC18 https://github.com/spanceac/PIC18-bootloader
