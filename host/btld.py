@@ -48,11 +48,13 @@ def encode_for_uart(data):
 
 def encode_data(data, count, addr):
     encoded = []
+    addr_up = (addr >> 16) & 0xff
     addr_hi = (addr >> 8) & 0xff
     addr_lo = addr & 0xff
 
     encoded.append(ord(HOST_MSG_FLASH_DATA))
     encoded.append(count)
+    encoded.append(addr_up)
     encoded.append(addr_hi)
     encoded.append(addr_lo)
 
@@ -108,6 +110,7 @@ def main():
     next_expect_addr = 0
     ignore_next_data_rec = False
     fw_size = 0
+    addr_upper = 0
 
     while (True):
         print("Sending start sequence to MCU")
@@ -129,7 +132,9 @@ def main():
 
         count = ascii2dec(line[1]) * 16 + ascii2dec(line[2])
 
-        addr = ascii2dec(line[3]) * (16 * 16 * 16) + ascii2dec(line[4]) * (16 * 16) + ascii2dec(line[5]) * 16 + ascii2dec(line[6])
+        addr_hi = (ascii2dec(line[3]) << 4) | ascii2dec(line[4])
+        addr_lo = (ascii2dec(line[5]) << 4) | ascii2dec(line[6])
+        addr = (addr_upper << 16) | (addr_hi << 8) | addr_lo
 
         rec_type = ascii2dec(line[8])
 
@@ -198,10 +203,15 @@ def main():
 
         elif rec_type == 4:
             ignore_next_data_rec = False
-            for i in range(count * 2):
-                if (ascii2dec(line[9 + i]) != 0):
-                    ignore_next_data_rec = True
-                    break
+            extended_addr_upper = ascii2dec(line[11]) << 4 | ascii2dec(line[12])
+
+            # every address >1MB we will consider to be unflashable. This is the
+            # case for configuration registers
+            if extended_addr_upper > 0x10:
+                ignore_next_data_rec = True
+            else:
+                addr_upper = extended_addr_upper
+
         else:
             print("Ingnoring record type", rec_type)
 
