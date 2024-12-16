@@ -39,6 +39,8 @@
 #define HOST_HANDSHAKE_MSG "@BTL\n"
 #define MCU_HANDSHAKE_RESP "@OK\n"
 
+#define HOST_MSG_DATA_PAYLOAD_OFFSET 4
+
 enum flashing_status {
     STATUS_NO_ERR,
     STATUS_ERR_INVALID_PAYLOAD,
@@ -57,7 +59,7 @@ const uint8_t ec_pub_key[] = {
 };
 
 enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
-    uint16_t addr = 0;
+    uint24_t addr = 0;
 
     switch(op) {
         case HOST_MSG_PROGRAM_SIZE:
@@ -87,15 +89,15 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
             write_flash(SIGNAT_OFFSET, data, SIGNAT_SIZE);
             break;
         case HOST_MSG_FLASH_DATA:
-            if (len < 4) { /* 1 byte cnt, 2 bytes addr, 1 data min */
+            if (len < 5) { /* 1 byte cnt, 3 bytes addr, 1 data min */
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
 
-            /* ignoring data count byte data[0] */
+            uint8_t payload_size = data[0];
 
-            addr = (uint16_t)data[1] << 8 | data[2];
+            addr = (uint24_t)data[1] << 16 | (uint24_t)data[2] << 8 | data[3];
 
-            if (addr + len - 3 >= SIGNAT_OFFSET) {
+            if (addr + payload_size >= SIGNAT_OFFSET) {
                 return STATUS_ERR_DENIED_ADDR;
             }
 
@@ -103,14 +105,14 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
                 /* TODO: check if GOTO */
                 /* TODO: check if 4 -7 is only 0xFF */
                 /* flash user code GOTO */
-                write_flash(4, data + 3, 4);
+                write_flash(4, &data[HOST_MSG_DATA_PAYLOAD_OFFSET], 4);
                 /* skip address 4 to 7 and flash what starts at offset 8 */
-                if (len > 3 + 8) {
-                    write_flash(8, data + 3 + 8, len - 3 - 8);
+                if (payload_size > 8) {
+                    write_flash(8, &data[HOST_MSG_DATA_PAYLOAD_OFFSET + 8], payload_size - 8);
                 }
                 break;
             }
-            write_flash(addr, data + 3, len - 3);
+            write_flash(addr, &data[HOST_MSG_DATA_PAYLOAD_OFFSET], payload_size);
             break;
         case HOST_MSG_FLASH_STOP:
             if (len > 0) {
@@ -185,7 +187,7 @@ int signature_valid() {
     SHA256_CTX ctx;
     BYTE cksum[SHA256_BLOCK_SIZE];
     uint8_t flread[64];
-    uint16_t addr = 0;
+    uint24_t addr = 0;
     const struct uECC_Curve_t * curve = uECC_secp256k1();
 #ifdef DEBUG
     char print[SIGNAT_SIZE * 2 + 20];
