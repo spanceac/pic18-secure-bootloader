@@ -129,7 +129,7 @@ Starting from address 8, user code is placed(interrupt handlers included, if any
 Bootloader doesn't set any interrupt handlers.
 
 At address `BTLD_OFFSET - CODE_SIZE - SIGNATURE_SIZE`, space for boot metadata is reserved.
-This region needs 66 bytes. 2 bytes holding the size of the user code and 64 bytes holding the signature of the user code.
+This region needs 67 bytes. 3 bytes holding the size of the user code and 64 bytes holding the signature of the user code.
 User code must end before this bootloader metadata region starts.
 
 ## Bootloader flash offset
@@ -186,7 +186,7 @@ Message operation byte:
 | Message operation byte | Meaning          | Message payload                                                                  |
 |------------------------|------------------|----------------------------------------------------------------------------------|
 |          D             | Flashing data    | data count(1 bytes) + flash address(3 bytes, LE) + flashing data(multiple bytes) |
-|          M             | Program size     | 2 bytes, LE                                                                      |
+|          M             | Program size     | 3 bytes, LE                                                                      |
 |          N             | Signature        | 64 bytes signature of flashed data                                               |
 |          X             | Flash end        | no payload                                                                       |
 

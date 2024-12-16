@@ -66,10 +66,12 @@ def encode_data(data, count, addr):
 
 def encode_size(fw_size):
     encoded = []
+    up = (fw_size >> 16) & 0xff
     hi = (fw_size >> 8) & 0xff
     lo = fw_size & 0xff
 
     encoded.append(ord(HOST_MSG_PROGRAM_SIZE))
+    encoded.append(up)
     encoded.append(hi)
     encoded.append(lo)
 
