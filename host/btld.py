@@ -145,7 +145,6 @@ def main():
 
             if next_expect_addr < addr:
                 fill_data = []
-                fill_addr = next_expect_addr
                 fill_cnt = addr - next_expect_addr
                 fw_size += fill_cnt
 
@@ -154,17 +153,10 @@ def main():
                     fill_data.append(0xFF)
 
                 for i in range(math.floor(fill_cnt / 64)):
-                    fill_enc = encode_data(fill_data, 64, fill_addr)
-                    fill_addr += 64
                     fw_hash.update(bytes(fill_data))
-                    ser.write(bytes(fill_enc))
-                    wait_for_mcu(ser)
 
                 if fill_cnt % 64:
-                    fill_enc = encode_data(fill_data[:fill_cnt % 64], fill_cnt % 64, fill_addr)
                     fw_hash.update(bytes(fill_data[:fill_cnt % 64]))
-                    ser.write(bytes(fill_enc))
-                    wait_for_mcu(ser)
 
             data = []
             for i in range(count):
