@@ -185,7 +185,7 @@ Message operation byte:
 
 | Message operation byte | Meaning          | Message payload                                                                  |
 |------------------------|------------------|----------------------------------------------------------------------------------|
-|          D             | Flashing data    | data count(1 bytes) + flash address(2 bytes, LE) + flashing data(multiple bytes) |
+|          D             | Flashing data    | data count(1 bytes) + flash address(3 bytes, LE) + flashing data(multiple bytes) |
 |          M             | Program size     | 2 bytes, LE                                                                      |
 |          N             | Signature        | 64 bytes signature of flashed data                                               |
 |          X             | Flash end        | no payload                                                                       |
@@ -315,9 +315,7 @@ During development I realised that this bootloader will probably never reach pro
 
 Thus, there are some TODOs left in the code or some places where macros should have been used instead of hardcoding.
 
-The UART protocol and flash access functions only support 16bit addresses.
-So the bootloader in this form would work only for devices that have flash size <=64kB.
-Fortunately it's not very hard to extend support for bigger flash sizes.
+The UART protocol and flash access functions support firmware sizes up to 16MB.
 
 There's no checksum for the UART protocol. This is not a security issue though, but a reliability issue.
 
