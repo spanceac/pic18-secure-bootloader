@@ -16,7 +16,8 @@
 #include "mcu/mcu.h"
 
 #define SIGNAT_SIZE 64
-#define CODE_SIZE_OFFSET BTLD_OFFSET - 2
+#define CODE_SIZE_BYTES 3
+#define CODE_SIZE_OFFSET BTLD_OFFSET - CODE_SIZE_BYTES
 #define SIGNAT_OFFSET CODE_SIZE_OFFSET - SIGNAT_SIZE
 
 #define HOST_MSG_START '@'
@@ -63,10 +64,10 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
 
     switch(op) {
         case HOST_MSG_PROGRAM_SIZE:
-            if (len != 2) {
+            if (len != CODE_SIZE_BYTES) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
-            write_flash(CODE_SIZE_OFFSET, data, 2);
+            write_flash(CODE_SIZE_OFFSET, data, CODE_SIZE_BYTES);
             break;
         case HOST_MSG_PROGRAM_SIGNAT:
             if (len != SIGNAT_SIZE) {
@@ -180,8 +181,8 @@ enum flashing_status fw_receive(void) {
 }
 
 int signature_valid() {
-    uint16_t siz = 0;
-    uint8_t d[2];
+    uint24_t siz = 0;
+    uint8_t d[CODE_SIZE_BYTES];
     uint8_t signat[SIGNAT_SIZE];
     size_t i;
     SHA256_CTX ctx;
@@ -195,12 +196,12 @@ int signature_valid() {
 
     sha256_init(&ctx);
 
-    read_flash(CODE_SIZE_OFFSET, d, 2);
+    read_flash(CODE_SIZE_OFFSET, d, sizeof(d));
 
-    siz = ((uint16_t)d[0] << 8) | (d[1] & 0xff);
+    siz = ((uint24_t)d[0] << 16) | ((uint24_t)d[1] << 8) | d[2] ;
 
 #ifdef DEBUG
-    snprintf(print, sizeof(print) - 1, "fw_siz: %u\n\0", siz);
+    snprintf(print, sizeof(print) - 1, "fw_siz: %lu\n\0", siz);
     uart_send_buf(print, strlen(print));
 #endif
 
@@ -233,8 +234,8 @@ int signature_valid() {
         sha256_update(&ctx, flread, sizeof(flread));
     }
     if (siz) {
-        read_flash(addr, flread, siz);
-        sha256_update(&ctx, flread, siz);
+        read_flash(addr, flread, (size_t)siz);
+        sha256_update(&ctx, flread, (size_t)siz);
     }
 
     sha256_final(&ctx, cksum);
