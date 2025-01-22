@@ -73,7 +73,6 @@ int uart_expect_msg(char *msg, size_t _len, size_t timeout_us)
 void uart_write_byte(uint8_t byte) {
     while (!TXSTA1bits.TRMT);
     TXREG1 = byte;
-    while (!TXSTA1bits.TRMT);
     return;
 }
 
