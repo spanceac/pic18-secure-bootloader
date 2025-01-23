@@ -102,10 +102,11 @@ def wait_for_mcu(ser):
         elif resp == MCU_ERR_DENIED_ADDR:
             print("ERR: MCU reported denied write address")
             sys.exit(-1)
-
+        else:
+            print("Unexpected MCU response:", resp)
 
 def main():
-    ser = serial.Serial(sys.argv[1], baudrate=115200, timeout=0.5)
+    ser = serial.Serial(sys.argv[1], baudrate=19200, timeout=0.5)
     f = open(sys.argv[2], 'r', encoding="utf-8")
     fw_hash = hashlib.new('sha256')
 

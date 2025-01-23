@@ -49,7 +49,7 @@ void read_flash(uint24_t address, uint8_t *buf, size_t count) {
 
 static inline void flash_erase_blk(size_t blk_idx)
 {
-    uint24_t blk_addr = blk_idx * FLASH_BLOCK_SIZ;
+    uint24_t blk_addr = (uint24_t)blk_idx * FLASH_BLOCK_SIZ;
     TBLPTRU = (uint8_t)(blk_addr >> 16);
     TBLPTRH = (uint8_t)(blk_addr >> 8);
     TBLPTRL = (uint8_t)(blk_addr & 0xff);

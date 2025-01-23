@@ -90,6 +90,7 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
             write_flash(SIGNAT_OFFSET, data, SIGNAT_SIZE);
             break;
         case HOST_MSG_FLASH_DATA:
+            uart_write_byte('T');
             if (len < 5) { /* 1 byte cnt, 3 bytes addr, 1 data min */
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
@@ -110,10 +111,13 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
                 /* skip address 4 to 7 and flash what starts at offset 8 */
                 if (payload_size > 8) {
                     write_flash(8, &data[HOST_MSG_DATA_PAYLOAD_OFFSET + 8], payload_size - 8);
+                    uart_write_byte('L');
                 }
+                uart_write_byte('V');
                 break;
             }
             write_flash(addr, &data[HOST_MSG_DATA_PAYLOAD_OFFSET], payload_size);
+            uart_write_byte('U');
             break;
         case HOST_MSG_FLASH_STOP:
             if (len > 0) {
@@ -134,8 +138,15 @@ enum flashing_status fw_receive(void) {
     size_t i = 0;
     bool escaped = false;
 
+    uart_write_byte('*');
+
     while (1) {
         uart_get_byte(&byte, 0, true);
+        if (byte == HOST_MSG_START) {
+            uart_write_byte('+');
+        } else if (byte == HOST_MSG_END) {
+            uart_write_byte('-');
+        }
 
         if (byte == HOST_MSG_ESC && !escaped) {
             /* next byte needs escaping */
@@ -155,6 +166,7 @@ enum flashing_status fw_receive(void) {
         }
 
         if (byte == HOST_MSG_START && i > 0) {
+            uart_write_byte('$');
             /* unexpected start of message, reset buffer */
             i = 1;
             msg[0] = HOST_MSG_START;
@@ -162,12 +174,15 @@ enum flashing_status fw_receive(void) {
         }
 
         if (msg[i] == HOST_MSG_END && msg[0] == HOST_MSG_START) {
+            uart_write_byte(':');
             if (i > 1) { /* at least the opcode as payload */
                 /* should check if byte cnt matches data received cnt */
+                uart_write_byte('R');
                 enum flashing_status status = message_handle(msg[1], msg + 2, i - 2);
                 if (status != STATUS_NO_ERR) {
                     return status;
                 }
+                uart_write_byte('S');
             }
             i = 0;
             uart_write_byte(MCU_MSG_OP_SUCCESS);
@@ -292,10 +307,14 @@ void main(void) {
 
     uart_send_buf((uint8_t *)MCU_HANDSHAKE_RESP, strlen(MCU_HANDSHAKE_RESP));
 
+    uart_write_byte('Y');
+
     status = fw_receive();
     if (status != STATUS_NO_ERR) {
         uart_write_byte(mcu_errs[status]);
     }
+
+    uart_write_byte('Z');
 
     asm("reset");
 }
