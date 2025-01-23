@@ -11,7 +11,7 @@ void uart_init(void) {
     TXSTA1bits.TXEN = 1;
     RCSTA1bits.SPEN = 1;
     RCSTA1bits.CREN = 1;
-    SPBRG1 = 8 ; /* 115200 baudrate */
+    SPBRG1 = 51 ; /* 19200 baudrate */
 }
 
 int uart_get_byte(uint8_t *byte, size_t timeout_us, bool block) {
