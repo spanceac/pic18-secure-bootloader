@@ -3,8 +3,30 @@
 #define FLASH_BLOCK_SIZ 64
 #define FLASH_SIZE 0x8000
 
+struct table_pointers {
+    uint8_t up;
+    uint8_t hi;
+    uint8_t lo;
+};
+
+static void save_table_pointers(struct table_pointers *tp)
+{
+    tp->up = TBLPTRU;
+    tp->hi = TBLPTRH;
+    tp->lo = TBLPTRL;
+}
+
+static void restore_table_pointers(struct table_pointers *tp)
+{
+    TBLPTRU = tp->up;
+    TBLPTRH = tp->hi;
+    TBLPTRL = tp->lo;
+}
+
 int write_flash(uint24_t addr, const uint8_t *buf, size_t count) {
     size_t i = 0;
+    struct table_pointers tp;
+    save_table_pointers(&tp);
 
     TBLPTRU = (uint8_t)(addr >> 16);
     TBLPTRH = (uint8_t)(addr >> 8);
@@ -33,10 +55,15 @@ int write_flash(uint24_t addr, const uint8_t *buf, size_t count) {
 
         addr++;
     }
+
+    restore_table_pointers(&tp);
     return 0;
 }
 
 void read_flash(uint24_t address, uint8_t *buf, size_t count) {
+    struct table_pointers tp;
+    save_table_pointers(&tp);
+
     TBLPTRU = (uint8_t)(address >> 16);
     TBLPTRH = (uint8_t)(address >> 8);
     TBLPTRL = (uint8_t)address & 0xff;
@@ -45,11 +72,16 @@ void read_flash(uint24_t address, uint8_t *buf, size_t count) {
         asm("TBLRD*+");
         buf[i] = TABLAT;
     }
+
+    restore_table_pointers(&tp);
 }
 
 static inline void flash_erase_blk(size_t blk_idx)
 {
     uint24_t blk_addr = (uint24_t)blk_idx * FLASH_BLOCK_SIZ;
+    struct table_pointers tp;
+    save_table_pointers(&tp);
+
     TBLPTRU = (uint8_t)(blk_addr >> 16);
     TBLPTRH = (uint8_t)(blk_addr >> 8);
     TBLPTRL = (uint8_t)(blk_addr & 0xff);
@@ -60,6 +92,8 @@ static inline void flash_erase_blk(size_t blk_idx)
     EECON2 = 0x55;
     EECON2 = 0xaa;
     EECON1bits.WR = 1; /* start programming (CPU stall until done) */
+
+    restore_table_pointers(&tp);
 }
 
 void erase_flash(uint24_t btld_addr) {
