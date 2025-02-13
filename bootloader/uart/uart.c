@@ -1,16 +1,16 @@
-#include <xc.h>
 #include "uart.h"
 
 #define _XTAL_FREQ 64000000
 
-void uart_init(void) {
-    TRISCbits.RC6 = 1; /* UART TX */
+void uart_init(enum rx_state rx_state) {
+    TRISCbits.RC6 = 0; /* UART TX */
     TRISCbits.RC7 = 1; /* UART RX */
     ANSELCbits.ANSC7 = 0;
     TXSTA1bits.SYNC = 0;
     TXSTA1bits.TXEN = 1;
     RCSTA1bits.SPEN = 1;
-    RCSTA1bits.CREN = 1;
+    rx_state == RX_STATE_ENABLED ? uart_rx_enable() : uart_rx_disable();
+
     SPBRG1 = 8 ; /* 115200 baudrate */
 }
 
@@ -42,12 +42,6 @@ int uart_expect_msg(char *msg, size_t _len, size_t timeout_us)
     char byte;
     size_t i = 0, len = _len;
     int ret;
-
-    if (RCSTA1bits.OERR) {
-        // clear RX overrun error which stops UART RX
-        RCSTA1bits.CREN = 0;
-        RCSTA1bits.CREN = 1;
-    }
 
     while (len) {
         ret = uart_get_byte((uint8_t *)&byte, 1, false);

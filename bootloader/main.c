@@ -274,8 +274,9 @@ void main(void) {
     enum flashing_status status;
 
     mcu_init();
-    uart_init();
+    uart_init(RX_STATE_DISABLED);
 
+    uart_rx_enable();
     ret = uart_expect_msg(HOST_HANDSHAKE_MSG, 5, 60000);
     if (ret) {
         /* nothing interesting from PC, booting old code */
@@ -288,10 +289,13 @@ void main(void) {
         }
     }
 
+
+    uart_rx_disable();
     erase_flash(BTLD_OFFSET);
 
     uart_send_buf((uint8_t *)MCU_HANDSHAKE_RESP, strlen(MCU_HANDSHAKE_RESP));
 
+    uart_rx_enable();
     status = fw_receive();
     if (status != STATUS_NO_ERR) {
         uart_write_byte(mcu_errs[status]);
