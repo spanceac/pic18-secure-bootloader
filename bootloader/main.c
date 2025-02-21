@@ -44,6 +44,7 @@
 
 enum flashing_status {
     STATUS_NO_ERR,
+    STATUS_FLASHING_DONE,
     STATUS_ERR_INVALID_PAYLOAD,
     STATUS_ERR_DENIED_ADDR,
 };
@@ -119,8 +120,7 @@ enum flashing_status message_handle(uint8_t op, uint8_t *data, size_t len) {
             if (len > 0) {
                 return STATUS_ERR_INVALID_PAYLOAD;
             }
-            asm("reset");
-            break;
+            return STATUS_FLASHING_DONE;
         default:
             return STATUS_ERR_INVALID_PAYLOAD;
             break;
@@ -165,7 +165,7 @@ enum flashing_status fw_receive(void) {
             if (i > 1) { /* at least the opcode as payload */
                 /* should check if byte cnt matches data received cnt */
                 enum flashing_status status = message_handle(msg[1], msg + 2, i - 2);
-                if (status != STATUS_NO_ERR) {
+                if (status == STATUS_FLASHING_DONE || status != STATUS_NO_ERR) {
                     return status;
                 }
             }
