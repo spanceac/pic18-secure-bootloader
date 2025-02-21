@@ -1,7 +1,6 @@
 #include <xc.h>
 
 #define FLASH_BLOCK_SIZ 64
-#define FLASH_SIZE 0x8000
 
 struct table_pointers {
     uint8_t up;
